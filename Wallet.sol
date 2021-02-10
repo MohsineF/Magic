@@ -11,13 +11,13 @@ pragma solidity >=0.7.0 <0.8.0;
 
 contract Wallet {
     address payable owner;
-    uint256 private dailyLimit;
-    uint256 private dailySpend;
-    uint256 private lastWithdrawal;
-    address[] private whiteList;
-    address[] private guardians; //delay
-    uint8 guardiansCount; 
-    uint8 whiteListCount;
+    uint256 private dailyLimit;                             // change effect only after 24 hours
+    uint256 private dailySpend;                             // spend daily limit each 24 hours
+    address[] private whitelist;
+    address[] private guardians;
+    uint256 private lastWithdrawal = 0;
+    mapping (address => uint256) private guardiansEffect;   // [guardian, timeOfAddition] add or delete effect only after 24 hours
+    mapping (address => uint256) private whitelistEffect;   // [account, timeOfAddition] add or delete effect only after 24 hours
 
     constructor (address payable _owner_) {
         owner = _owner_;
@@ -32,45 +32,92 @@ contract Wallet {
         _;
     }
 
-    function transfer(address _to, uint256 _amount) payable external ownerOnly {
-        require(_amount > 0 && _to != address(0));
-        if (isWhiteListed(_to) == false) {
-            if  (1 days <= block.timestamp - lastWithdrawal) {
+    function transfer(address payable _to, uint256 _amount) payable external ownerOnly {
+        require(_amount > 0 && _to != address(0), "Transfer: Input Error");
+        if (isWhitelisted(_to) == false) {
+            if  (1 days + lastWithdrawal >= block.timestamp) {
                 require (dailyLimit >= _amount, "Transfer: Exceeds daily limit !");
                 dailySpend = dailyLimit - _amount;
-                lastWithdrawal = block.timestamp;
             }
             else {
                 require (dailySpend >= _amount, "Transfer: Daily limit reached !");
                 dailySpend -= _amount;
             }
+            lastWithdrawal = block.timestamp;
         }
-        address(this).transfer(_amount);
-    }
-
-    function getWhiteList() view external returns(address[] memory) {
-        return (whiteList);
+        else {                              
+            require (iswhitelistEffect(_to) == true, "Transfer: still in whitelistEffect !");
+        }
+        _to.transfer(_amount);
     }
     
-    function addToWhiteList(address _account) external ownerOnly {
-        require(isWhiteListed(_account) == false, "Add White List: Already exists !");
-        whiteList[whiteListCount++] = _account;
+    function getGuardians() view external returns(address[] memory) {
+        return (guardians);
     }
-
-    function deleteFromWhiteList(address _account) external ownerOnly {
-        for(uint256 i = 0; i < whiteListCount; i++) {
-            if (whiteList[i] == _account) {
-                delete whiteList[i];
-                whiteListCount--;
+    
+    function addGuardian(address _guardian) external ownerOnly {
+        require(isGuardian(_guardian) == false, "Add Guardian: Already guardian");
+        guardians.push(_guardian);
+        guardiansEffect[_guardian] = block.timestamp;
+    }
+    
+    function deleteGuardian(address _guardian) external ownerOnly {
+        for(uint256 i = 0; i < guardians.length; i++) {
+            if (guardians[i] == _guardian) {
+                delete guardians[i];
+                break;
             }
         }
     }
     
-    function isWhiteListed(address _account) view internal returns(bool){
-        for(uint256 i = 0; i < whiteListCount; i++) {
-            if (whiteList[i] == _account) {
+    function isGuardian(address _guardian) view internal returns (bool) {
+        for(uint256 i = 0; i < guardians.length; i++) {
+            if (guardians[i] == _guardian) {
                 return true;
             }
+        }
+        return false;
+    }
+    function isGuardianEffect(address _guardian) external returns (bool) {
+        if (1 days + guardiansEffect[_guardian] >= block.timestamp) {
+            delete guardiansEffect[_guardian];
+            return true;
+        }
+        return false;
+    }
+    
+    function getWhitelist() view external returns(address[] memory) {
+        return (whitelist);
+    }
+    
+    function addToWhitelist(address _account) external ownerOnly {
+        require(isWhitelisted(_account) == false, "Add White List: Already whitelised !");
+        whitelist.push(_account);
+        whitelistEffect[_account] = block.timestamp;
+    }
+
+    function deleteFromWhitelist(address _account) external ownerOnly {
+        for(uint256 i = 0; i < whitelist.length; i++) {
+            if (whitelist[i] == _account) {
+                delete whitelist[i];
+                break;
+            }
+        }
+    }
+    
+    function isWhitelisted(address _account) view internal returns (bool) {
+        for(uint256 i = 0; i < whitelist.length; i++) {
+            if (whitelist[i] == _account) {
+               return true;
+            }
+        }
+        return false;
+    }
+    
+    function iswhitelistEffect(address _account) internal returns (bool) {
+        if (1 days + whitelistEffect[_account] >= block.timestamp) {
+            delete whitelistEffect[_account];
+            return true;
         }
         return false;
     }
@@ -80,11 +127,11 @@ contract Wallet {
         dailySpend = _limit;
     }
 
-    function getDailyLimit() external view ownerOnly returns (uint256) {
+    function getDailyLimit() external view returns (uint256) {
         return dailyLimit;
     }
 
-     function getDailySpend() external view ownerOnly returns (uint256) {
+     function getDailySpend() external view returns (uint256) {
         return dailySpend;
     }
 
@@ -102,7 +149,7 @@ contract Wallet {
 
     receive() external payable {
     }
-
+    
     fallback() external {
     }
 }
