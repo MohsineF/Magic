@@ -82,7 +82,7 @@ contract Wallet {
     
     function addToWaitList(address _account, bool _group) external ownerOnly {
         require (waitList[_account][_group] == 0, "Wait List: Already in wait list !");
-        waitList[_account][_group] = block.timestamp + 30 seconds;
+        waitList[_account][_group] = block.timestamp + 24 hours;
     }
     
     function deleteFromWaitList(address _account, bool _group) external ownerOnly {
@@ -133,7 +133,7 @@ contract Wallet {
     
     function addNewDailyLimit(uint256 _limit) external ownerOnly {
         require (_limit > 0, "Limit: Zero not allowed !");
-        limit.time = block.timestamp + 30 seconds;
+        limit.time = block.timestamp + 24 hours;
         limit.newLimit = _limit;
     }
     
